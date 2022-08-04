@@ -1,0 +1,165 @@
+import os
+import sys
+import time
+#import smbus
+import numpy as np
+import threading as Thread
+from adafruit_extended_bus import ExtendedI2C as I2C
+import adafruit_bno055
+from shapely.geometry import Polygon, Point
+import multiprocessing as mp
+from multiprocessing import Value
+import serial
+import geopy.distance
+from numpy import arctan2,random,sin,cos,degrees
+import json
+from geographiclib.geodesic import Geodesic
+
+arduino = serial.Serial(
+    port = '/dev/ttyACM0',
+    baudrate = 2000000, #perhaps make this lower need to do research
+    bytesize = serial.EIGHTBITS,
+    parity = serial.PARITY_NONE,
+    stopbits = serial.STOPBITS_ONE,
+    timeout = 5,
+    xonxoff = False,
+    rtscts = False,
+    dsrdtr = False,
+    writeTimeout = 2
+    )
+
+
+counter = 0
+locationlat = 38.93218
+locationlon = -77.09977
+
+def Left():
+    arduino.write("1".encode()) 
+    global b
+    b = 1
+def Forward():
+    arduino.write("0".encode())
+    global b
+    b = 0
+def Right():
+    arduino.write("2".encode())
+    global b
+    b = 2
+def Stop():
+    arduino.write("4".encode())
+    global b
+    b = 4
+def Back():
+    arduino.write("3".encode())
+    global b
+    b = 3
+def Search():
+    arduino.write("5".encode())
+    global b
+    b = 5
+
+b = 3
+
+final = (locationlat, locationlon)
+
+
+input("press any key and enter to continue")
+xx = Value('d',0.0)
+yy = Value('d',0.0)
+def begintrack():
+    global counter
+    #global Geofencecoordinates
+    # global xx    
+    # global yy
+    # global distance
+    while True:
+        try:
+            with open('/home/gilblankenship/Projects/PythonCode/env/main/driveto/location.json') as json_file:
+                locationdict = json.load(json_file)
+            
+            x = locationdict['latitude']
+            xx.value = float(x)
+            print(x)
+            y = locationdict['longetude']
+            yy.value = float(y)
+           
+            print(y)
+            
+            # current = (xx, yy)
+            # distance = geopy.distance.distance(current,final).m
+            time.sleep(.5)
+        except json.decoder.JSONDecodeError:
+            print("error")
+
+         
+            
+
+track = mp.Process(target = begintrack)  
+
+i2c = I2C(8)
+sensor = adafruit_bno055.BNO055_I2C(i2c)
+sensor.mode = adafruit_bno055.NDOF_MODE
+
+last_val = 0xFFFF
+
+yaw = Value('d',0.0)
+currTime = time.time()
+print_count = 0
+def direction():
+    global yangle
+    global zangle
+    global yaw
+    while True:
+        yaw.value, yangle, zangle = sensor.euler
+        print("yaw =",yaw.value)
+
+        time.sleep(0.5)
+
+dir = mp.Process(target = direction)
+distance = Value('d',0.0)
+def howfar():
+
+    global distance
+    current = (xx.value, yy.value)
+    distance.value = geopy.distance.distance(current,final).m
+
+far = mp.Process(target = howfar)
+track.start()
+print("tracking")
+time.sleep(5)
+dir.start()
+time.sleep(5)
+print("finding direction")
+far.start()
+time.sleep(5)
+print("measuring distance")
+
+
+while distance.value > .5:
+    X = xx.value
+    Y = yy.value
+    bearing = Geodesic.WGS84.Inverse(X, Y, locationlat, locationlon)['azi1']
+    if bearing <0:
+        bearing = bearing +360
+    print("bearing=",bearing)
+    bearinglow = bearing - 20
+    if bearinglow < 0:
+        bearinglow = bearinglow + 360
+    bearinghigh = bearing + 20
+    if bearinghigh > 360:
+        bearinghigh = bearinghigh - 360
+    if yaw.value > bearinglow and yaw.value < bearinghigh and b != 0:
+        Forward()
+    if yaw.value < bearinglow  and b != 2:
+        Right()
+    if yaw.value > bearinghigh and b !=1:
+        Left()
+    time.sleep(1.5)
+    
+
+
+
+if distance <.5:
+    far.terminate()
+    dir.terminate()
+    track.terminate()
