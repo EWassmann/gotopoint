@@ -30,19 +30,22 @@ arduino = serial.Serial(
 
 
 counter = 0
-locationlat = 38.93218
-locationlon = -77.09977
+locationlat = 38.9321521
+locationlon = -77.0888156
 
 def Left():
     arduino.write("1".encode()) 
+    print("left")
     global b
     b = 1
 def Forward():
     arduino.write("0".encode())
+    print("forward")
     global b
     b = 0
 def Right():
     arduino.write("2".encode())
+    print("right")
     global b
     b = 2
 def Stop():
@@ -63,7 +66,7 @@ b = 3
 final = (locationlat, locationlon)
 
 
-input("press any key and enter to continue")
+#input("press any key and enter to continue")
 xx = Value('d',0.0)
 yy = Value('d',0.0)
 def begintrack():
@@ -79,11 +82,11 @@ def begintrack():
             
             x = locationdict['latitude']
             xx.value = float(x)
-            print(x)
+            #print(x)
             y = locationdict['longetude']
             yy.value = float(y)
            
-            print(y)
+            #print(y)
             
             # current = (xx, yy)
             # distance = geopy.distance.distance(current,final).m
@@ -102,6 +105,8 @@ sensor.mode = adafruit_bno055.NDOF_MODE
 
 last_val = 0xFFFF
 
+
+
 yaw = Value('d',0.0)
 currTime = time.time()
 print_count = 0
@@ -111,37 +116,47 @@ def direction():
     global yaw
     while True:
         yaw.value, yangle, zangle = sensor.euler
-        print("yaw =",yaw.value)
-
-        time.sleep(0.5)
+        
+        yaw.value = yaw.value + 10 #this accounts for magnetic vs true north
+        if yaw.value > 360:
+            yaw.value = yaw.value - 360
+        #print("yaw =",yaw.value)
+        #time.sleep(0.3)
 
 dir = mp.Process(target = direction)
+
 distance = Value('d',0.0)
 def howfar():
-
-    global distance
-    current = (xx.value, yy.value)
-    distance.value = geopy.distance.distance(current,final).m
+    while True:
+        global distance
+        current = (xx.value, yy.value)
+        distance.value = geopy.distance.distance(current,final).m
+        #print("distance=",distance.value)
 
 far = mp.Process(target = howfar)
 track.start()
 print("tracking")
 time.sleep(5)
 dir.start()
-time.sleep(5)
+input("please move robot around in all directions, press enter when done")
+#time.sleep(5)
 print("finding direction")
+h = sensor.calibration_status
+print(h)
 far.start()
 time.sleep(5)
 print("measuring distance")
 
 
-while distance.value > .5:
+while distance.value > 1:
     X = xx.value
     Y = yy.value
     bearing = Geodesic.WGS84.Inverse(X, Y, locationlat, locationlon)['azi1']
+    
     if bearing <0:
         bearing = bearing +360
-    print("bearing=",bearing)
+    #print("bearing=",bearing)
+    print("yaw=",yaw.value)
     bearinglow = bearing - 20
     if bearinglow < 0:
         bearinglow = bearinglow + 360
@@ -154,12 +169,13 @@ while distance.value > .5:
         Right()
     if yaw.value > bearinghigh and b !=1:
         Left()
-    time.sleep(1.5)
+    time.sleep(1)
     
 
 
 
-if distance <.5:
+if distance <1:
+    Stop()
     far.terminate()
     dir.terminate()
     track.terminate()
