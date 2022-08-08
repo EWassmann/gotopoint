@@ -30,7 +30,7 @@ arduino = serial.Serial(
 
 
 counter = 0
-locationlat = 38.9321521
+locationlat =38.9321521
 locationlon = -77.0888156
 
 def Left():
@@ -117,11 +117,11 @@ def direction():
     while True:
         yaw.value, yangle, zangle = sensor.euler
         
-        yaw.value = yaw.value + 10 #this accounts for magnetic vs true north
-        if yaw.value > 360:
-            yaw.value = yaw.value - 360
+        yaw.value = yaw.value - 10 #this accounts for magnetic vs true north  
+        if yaw.value < 0:
+            yaw.value = yaw.value + 360
         #print("yaw =",yaw.value)
-        #time.sleep(0.3)
+        time.sleep(0.1)
 
 dir = mp.Process(target = direction)
 
@@ -148,19 +148,19 @@ time.sleep(5)
 print("measuring distance")
 
 
-while distance.value > 1:
+while distance.value > 2:
     X = xx.value
     Y = yy.value
     bearing = Geodesic.WGS84.Inverse(X, Y, locationlat, locationlon)['azi1']
-    
+    #print(bearing)
     if bearing <0:
         bearing = bearing +360
     #print("bearing=",bearing)
-    print("yaw=",yaw.value)
-    bearinglow = bearing - 20
+    #print("yaw=",yaw.value)
+    bearinglow = bearing - 13
     if bearinglow < 0:
         bearinglow = bearinglow + 360
-    bearinghigh = bearing + 20
+    bearinghigh = bearing + 13
     if bearinghigh > 360:
         bearinghigh = bearinghigh - 360
     if yaw.value > bearinglow and yaw.value < bearinghigh and b != 0:
@@ -169,13 +169,14 @@ while distance.value > 1:
         Right()
     if yaw.value > bearinghigh and b !=1:
         Left()
-    time.sleep(1)
+    # time.sleep(1)
     
 
 
 
-if distance <1:
+if distance.value < 2:
     Stop()
+    time.sleep(1)
     far.terminate()
     dir.terminate()
     track.terminate()
